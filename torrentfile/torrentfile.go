@@ -2,11 +2,15 @@ package torrentfile
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/sha1"
 	"fmt"
 	"github.com/jackpal/bencode-go"
-	"io"
+	"net/http"
+	"os"
 )
+
+const Port uint16 = 6881
 
 type TorrentData struct {
 	Announce    string
@@ -29,16 +33,62 @@ type bencodeTorrent struct {
 	Info     bencodeInfo `bencode:"info"`
 }
 
-func Open(r io.Reader) (*bencodeTorrent, error) {
-	benToTorrent := bencodeTorrent{}
-	err := bencode.Unmarshal(r, &benToTorrent)
+func (tf *TorrentData) DownloadToFile() error {
+
+	// Set up params
+	randomBytes := make([]byte, 20)
+	rand.Read(randomBytes)
+	getRequestURL, err := tf.buildTrackerURL([20]byte(randomBytes), Port)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &benToTorrent, nil
+
+	// Get request
+	resp, err := http.Get(getRequestURL)
+	if err != nil {
+		fmt.Println("Error making request:", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	// raw ben -> ben struct
+	benResponse := bencodePeerResponse{}
+	err = bencode.Unmarshal(resp.Body, &benResponse)
+	if err != nil {
+		return err
+	}
+
+	peers, err := unmarshalPeers([]byte(benResponse.Peers))
+	if err != nil {
+		fmt.Print(err)
+		return err
+	}
+
+	fmt.Println(peers[0].IP, peers[0].Port)
+
+	return nil
 }
 
-func (bt *bencodeTorrent) ToTorrentData() (TorrentData, error) {
+func Open(filePath string) (TorrentData, error) {
+	// open file
+	tFile, err := os.Open(filePath)
+	if err != nil {
+		return TorrentData{}, err
+	}
+	defer tFile.Close()
+
+	// raw ben -> ben struct
+	benToTorrent := bencodeTorrent{}
+	err = bencode.Unmarshal(tFile, &benToTorrent)
+	if err != nil {
+		return TorrentData{}, err
+	}
+
+	// ben struct -> go struct
+	return benToTorrent.toTorrentData()
+}
+
+func (bt *bencodeTorrent) toTorrentData() (TorrentData, error) {
 	// InfoHash
 	var buffer bytes.Buffer
 	err := bencode.Marshal(&buffer, bt.Info)

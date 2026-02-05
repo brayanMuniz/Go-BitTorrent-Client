@@ -16,13 +16,13 @@ type Peer struct {
 	Port uint16
 }
 
-type BencodePeerResponse struct {
+type bencodePeerResponse struct {
 	Interval int    `bencode:"interval"`
 	Peers    string `bencode:"peers"`
 }
 
 // GET request to the announce URL supplied in the .torrent file, with a few query parameters:
-func (t *TorrentData) BuildTrackerURL(peerID [20]byte, port uint16) (string, error) {
+func (t *TorrentData) buildTrackerURL(peerID [20]byte, port uint16) (string, error) {
 	base, err := url.Parse(t.Announce)
 	if err != nil {
 		return "", err
@@ -40,8 +40,8 @@ func (t *TorrentData) BuildTrackerURL(peerID [20]byte, port uint16) (string, err
 	return base.String(), nil
 }
 
-func ParseResponse(r io.Reader) (*BencodePeerResponse, error) {
-	benResponse := BencodePeerResponse{}
+func parseResponse(r io.Reader) (*bencodePeerResponse, error) {
+	benResponse := bencodePeerResponse{}
 	err := bencode.Unmarshal(r, &benResponse)
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func ParseResponse(r io.Reader) (*BencodePeerResponse, error) {
 	return &benResponse, nil
 }
 
-func Unmarshal(peersBin []byte) ([]Peer, error) {
+func unmarshalPeers(peersBin []byte) ([]Peer, error) {
 	const peersize = 6 // 4 for ip, 2 for port number
 	if len(peersBin)%peersize != 0 {
 		return nil, fmt.Errorf("malformed peers")
